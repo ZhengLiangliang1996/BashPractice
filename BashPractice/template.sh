@@ -29,7 +29,6 @@ function script_trap_err() {
         fi
 
         # print basic debugging information 
-        printf '%b\n' "$ta_none"
         printf '====== Abnormal Termination of Script ======\n'
         printf 'Script Path:                %s\n' "$script_path"
         printf 'Script Parameter:           %s\n' "$script_params"
@@ -63,14 +62,45 @@ function script_trap_exit() {
         rmdir "$script_lock"
     fi
 
-    # Restiore terminal colour
-    printf '%b' '$ta_none'
+}
+
+# DESC: Generic Script Initialisation 
+# ARGS: $@ (optional) Arguments provided to the script
+# OUTS: $cwd: The current working directory when the script was run 
+#       $script_path: The full path of the script
+#       $script_dir: The full path of the script 
+#       $script_name: The filename of the scirpt 
+#       $script_params: The original parameters given to the script
+
+function script_init() {
+    # script meta variables
+    readonly cwd="$PWD"
+    readonly script_path="BASH_SOURCE[0]"
+    script_name="$(basename "$script_path")"
+    readonly script_params="$*"
+    script_dir="$(dirname "$script_path")"
+    readonly script_dir script_name
+} 
+
+# DESC: Usage help
+# ARGS: None
+# OUTS: None
+function script_usage() {
+    cat << EOF
+Usage:
+     -h|--help                  Displays this help
+     -v|--verbose               Displays verbose output
+    -nc|--no-colour             Disables colour output
+    -cr|--cron                  Run silently unless we encounter an error
+EOF
 }
 
 # DESC: Parameter parser
+# ARGS: $@ (optional): Arguments provided to the script 
+# OUTS: variables indicating command-line options
 function parse_params() {
     local param 
-    while [[ $# -gt 0]]; do
+    while [[ $# -gt 0 ]]; do
         param="$1"
         shift
         case $param in 
@@ -80,9 +110,6 @@ function parse_params() {
                 ;;
             -v | --verbose)
                 verbose=true
-                ;;
-            -nc | --no-colour)
-                no_colour=true
                 ;;
             -cr | --cron)
                 cron=true
@@ -94,11 +121,32 @@ function parse_params() {
     done 
 }
 
+# DESC: Initialise Cron Mode
+# ARGS: None 
+# OUTS: $script_output: Path to the file stdout & stderr was redirected to
+function cron_init() {
+    if [[ -n ${cron-} ]]; then 
+        # Redirect all of the output to a temperory file
+        script_output="$(mkemp --tmpdir "#script_name".XXXXX)"
+        readonly script_output
+        exec 3>&1 4>$2 1>"script_outpur" 2>&1 
+    fi
+}
 
 # main function 
 function main() {
     trap script_trap_err ERR  
     trap script_trap_exit EXIT 
-
-
+    
+    echo 'Script Initialisation Started'
+    script_init "$@"
+    parse_params "$@"
+    cron_init
+    echo 'Script Initialisation Finished'
 }
+
+# Invoke main with args if not sourced
+# Approach via: https://stackoverflow.com/a/28776166/8787985
+if ! (return 0 2> /dev/null); then
+    main "$@"
+fi
