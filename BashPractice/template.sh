@@ -19,7 +19,7 @@ function script_trap_err() {
 
     # Validate provided exit code 
     if [[ ${1-} =~ ^[0-9]+$ ]]; then 
-        exit_code="$1"
+        $exit_code="$1"
     fi 
 
     # Output debug data if in Cron mode
@@ -36,7 +36,7 @@ function script_trap_err() {
 
         # print the script if have it 
         if [[ -n ${script_output-} ]]; then 
-            printf 'Script Output: \n\n%s' "$(cat "$script_outpur")"
+            printf 'Script Output: \n\n%s' "$(cat "$script_output")"
         else 
             printf 'Script Output:     None (failed before log init)\n'
         fi 
@@ -50,11 +50,11 @@ function script_trap_err() {
 # ARGS: None 
 # OUTS: None 
 function script_trap_exit() {
-    cd "$orig_cwd"
-    
+    cd "$cwd"
     # Remove cron mode script log 
+    printf "$script_output"
     if [[ -n ${cron-} && -f ${script_output-} ]]; then
-        rm "$script_out"
+        rm "$script_output"
     fi
 
     # Remove script excution lock 
@@ -75,7 +75,7 @@ function script_trap_exit() {
 function script_init() {
     # script meta variables
     readonly cwd="$PWD"
-    readonly script_path="BASH_SOURCE[0]"
+    readonly script_path="${BASH_SOURCE[0]}"
     script_name="$(basename "$script_path")"
     readonly script_params="$*"
     script_dir="$(dirname "$script_path")"
@@ -127,9 +127,9 @@ function parse_params() {
 function cron_init() {
     if [[ -n ${cron-} ]]; then 
         # Redirect all of the output to a temperory file
-        script_output="$(mkemp --tmpdir "#script_name".XXXXX)"
+        script_output="$(mktemp "$script_name".XXXXX)"
         readonly script_output
-        exec 3>&1 4>$2 1>"script_outpur" 2>&1 
+        exec 3>&1 4>&2 1>"$script_output" 2>&1
     fi
 }
 
